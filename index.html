@@ -110,6 +110,12 @@
   }
   button:disabled{opacity:.6;cursor:wait;}
   button:hover:not(:disabled){opacity:.9;}
+  button.secundario{
+    background:#fff;
+    color:var(--brasa);
+    border:1.5px solid var(--brasa);
+    margin-top:8px;
+  }
   #estado{
     text-align:center;
     font-size:.85rem;
@@ -118,6 +124,13 @@
   }
   #estado.ok{color:var(--oliva);}
   #estado.error{color:var(--brasa);}
+  #vendedorInfo{
+    font-size:.78rem;
+    margin-top:6px;
+    min-height:16px;
+  }
+  #vendedorInfo.existe{color:var(--oliva);}
+  #vendedorInfo.nuevo{color:#9a8c73;}
 
   table{
     width:100%;
@@ -169,6 +182,19 @@
   }
   .resumen .monto b{font-size:1.15rem;}
   #unidadesPagadas{font-size:.78rem;color:#6b5f4f;font-weight:normal;}
+
+  .badge{
+    display:inline-block;
+    padding:3px 9px;
+    border-radius:999px;
+    font-size:.72rem;
+    font-weight:bold;
+    white-space:nowrap;
+  }
+  .badge-pendiente{background:#FCEBD8;color:#9a4a1f;}
+  .badge-pagado{background:#E7EEDF;color:var(--oliva);}
+
+  #buscarEstado{margin-bottom:12px;}
 </style>
 </head>
 <body>
@@ -183,10 +209,12 @@
   </header>
 
   <div class="card">
-    <h2>Registrar pago</h2>
+    <h2>Registrar / actualizar vendedor</h2>
     <form id="form">
-      <label for="vendedor">Vendedor</label>
-      <input type="text" id="vendedor" placeholder="Ej: Óscar" required>
+      <label for="vendedor">Vendedor (buscá el nombre o escribí uno nuevo)</label>
+      <input type="text" id="vendedor" list="listaVendedores" placeholder="Ej: Alexis Pérez" required autocomplete="off">
+      <datalist id="listaVendedores"></datalist>
+      <div id="vendedorInfo"></div>
 
       <label for="vendido">Hamburguesas vendidas (total acumulado)</label>
       <input type="number" id="vendido" min="0" step="1" placeholder="Ej: 10" required>
@@ -208,7 +236,8 @@
         <div class="monto">Debe: <b id="montoPendiente">Gs. 0</b></div>
       </div>
 
-      <button type="submit" id="btnGuardar">Guardar registro</button>
+      <button type="submit" id="btnGuardar">Guardar / actualizar</button>
+      <button type="button" class="secundario" id="btnNuevo">Limpiar (cargar otro vendedor)</button>
       <div id="estado"></div>
     </form>
   </div>
@@ -227,22 +256,22 @@
   </div>
 
   <div class="card">
-    <h2>Historial</h2>
+    <h2>Estado por vendedor</h2>
+    <input type="text" id="buscarEstado" placeholder="🔍 Buscar por nombre...">
     <div class="tabla-scroll">
-      <table id="tablaHistorial">
+      <table id="tablaEstado">
         <thead>
           <tr>
-            <th>Fecha</th>
             <th>Vendedor</th>
             <th class="num">Vendido</th>
-            <th class="num">Efectivo (Gs.)</th>
-            <th class="num">Transf. (Gs.)</th>
             <th class="num">Pagado (Gs.)</th>
             <th class="num">Pendiente (Gs.)</th>
+            <th>Estado</th>
+            <th>Últ. act.</th>
           </tr>
         </thead>
         <tbody>
-          <tr><td colspan="7" style="text-align:center;color:#9a8c73;">Cargando...</td></tr>
+          <tr><td colspan="6" style="text-align:center;color:#9a8c73;">Cargando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -282,8 +311,45 @@ function formatearInputMiles(input){
 }
 formatearInputMiles($('efectivo'));
 formatearInputMiles($('transferencia'));
-$('efectivo').value = '0';
-$('transferencia').value = '0';
+
+// --- Cache local del estado de vendedores (se llena al cargar) ---
+let vendedoresCache = [];
+
+function normalizarNombre(n){
+  return (n || '').trim().toLowerCase();
+}
+
+// --- Buscar vendedor existente al escribir/seleccionar el nombre ---
+function buscarVendedor(){
+  const nombre = normalizarNombre($('vendedor').value);
+  const info = $('vendedorInfo');
+  if(!nombre){ info.textContent=''; info.className=''; return; }
+
+  const encontrado = vendedoresCache.find(v => normalizarNombre(v.vendedor) === nombre);
+  if(encontrado){
+    $('vendido').value = encontrado.vendido;
+    $('efectivo').value = Number(encontrado.efectivo).toLocaleString('es-PY');
+    $('transferencia').value = Number(encontrado.transferencia).toLocaleString('es-PY');
+    info.textContent = `✓ Registro existente cargado (última actualización: ${encontrado.fecha})`;
+    info.className = 'existe';
+  } else {
+    info.textContent = 'Vendedor nuevo — se creará un registro al guardar';
+    info.className = 'nuevo';
+  }
+  actualizarResumen();
+}
+$('vendedor').addEventListener('change', buscarVendedor);
+$('vendedor').addEventListener('blur', buscarVendedor);
+
+$('btnNuevo').addEventListener('click', () => {
+  $('form').reset();
+  $('efectivo').value = '0';
+  $('transferencia').value = '0';
+  $('vendedorInfo').textContent = '';
+  $('vendedorInfo').className = '';
+  actualizarResumen();
+  $('vendedor').focus();
+});
 
 // --- Cálculo en vivo del resumen ---
 function actualizarResumen(){
@@ -291,7 +357,7 @@ function actualizarResumen(){
   const efectivoGs = parseMonto('efectivo');
   const transferenciaGs = parseMonto('transferencia');
   const pagadoGs = efectivoGs + transferenciaGs;
-  const unidadesPagadas = pagadoGs / PRECIO_UNITARIO; // puede quedar con decimales si el monto no es múltiplo exacto
+  const unidadesPagadas = pagadoGs / PRECIO_UNITARIO;
   const pendienteUnidades = vendido - unidadesPagadas;
   const pendienteGs = Math.max(vendido * PRECIO_UNITARIO - pagadoGs, 0);
 
@@ -308,7 +374,7 @@ function actualizarResumen(){
 }
 ['vendido','efectivo','transferencia'].forEach(id => $(id).addEventListener('input', actualizarResumen));
 
-// --- Envío del formulario ---
+// --- Envío del formulario (crea o actualiza el registro del vendedor) ---
 $('form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const url = getUrl();
@@ -335,9 +401,7 @@ $('form').addEventListener('submit', async (e) => {
     });
     estado.textContent = '✅ Registro guardado';
     estado.className = 'ok';
-    $('form').reset();
-    actualizarResumen();
-    setTimeout(cargarHistorial, 1200); // damos tiempo a que la sheet se actualice
+    setTimeout(cargarEstado, 1200); // damos tiempo a que la sheet se actualice
   }catch(err){
     estado.textContent = '❌ No se pudo guardar. Revisá la URL o tu conexión.';
     estado.className = 'error';
@@ -346,31 +410,62 @@ $('form').addEventListener('submit', async (e) => {
   }
 });
 
-// --- Carga del historial y totales desde la Sheet ---
-async function cargarHistorial(){
+// --- Renderizar la tabla de estado (aplica el filtro de búsqueda) ---
+function renderTablaEstado(){
+  const filtro = normalizarNombre($('buscarEstado').value);
+  const tbody = document.querySelector('#tablaEstado tbody');
+
+  let filas = vendedoresCache;
+  if(filtro){
+    filas = filas.filter(v => normalizarNombre(v.vendedor).includes(filtro));
+  }
+  // Pendientes primero, luego alfabético
+  filas = [...filas].sort((a,b) => {
+    const pa = Number(a.pendiente)>0 ? 0 : 1;
+    const pb = Number(b.pendiente)>0 ? 0 : 1;
+    if(pa !== pb) return pa - pb;
+    return a.vendedor.localeCompare(b.vendedor);
+  });
+
+  if(!filas.length){
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#9a8c73;">Sin resultados</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filas.map(r => {
+    const pend = Number(r.pendiente) || 0;
+    const badge = pend > 0
+      ? `<span class="badge badge-pendiente">⏳ Pendiente</span>`
+      : `<span class="badge badge-pagado">✅ Pagado</span>`;
+    return `
+      <tr>
+        <td>${r.vendedor}</td>
+        <td class="num">${r.vendido}</td>
+        <td class="num">${formatGs(r.pagado)}</td>
+        <td class="num">${formatGs(Math.max(pend,0))}</td>
+        <td>${badge}</td>
+        <td>${r.fecha}</td>
+      </tr>
+    `;
+  }).join('');
+}
+$('buscarEstado').addEventListener('input', renderTablaEstado);
+
+// --- Carga el estado de todos los vendedores desde la Sheet ---
+async function cargarEstado(){
   const url = getUrl();
-  const tbody = document.querySelector('#tablaHistorial tbody');
-  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#9a8c73;">Cargando...</td></tr>';
+  const tbody = document.querySelector('#tablaEstado tbody');
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#9a8c73;">Cargando...</td></tr>';
 
   try{
     const res = await fetch(url + '?action=historial');
     const rows = await res.json();
+    vendedoresCache = rows;
 
-    if(!rows.length){
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#9a8c73;">Sin registros todavía</td></tr>';
-    } else {
-      tbody.innerHTML = rows.map(r => `
-        <tr>
-          <td>${r.fecha}</td>
-          <td>${r.vendedor}</td>
-          <td class="num">${r.vendido}</td>
-          <td class="num">${formatGs(r.efectivo)}</td>
-          <td class="num">${formatGs(r.transferencia)}</td>
-          <td class="num">${formatGs(r.pagado)}</td>
-          <td class="num">${formatGs(r.pendiente)}</td>
-        </tr>
-      `).join('');
-    }
+    // Actualizar datalist para autocompletar el buscador del formulario
+    $('listaVendedores').innerHTML = rows.map(r => `<option value="${r.vendedor}">`).join('');
+
+    renderTablaEstado();
 
     let tVendido=0, tPagado=0, tEfectivo=0, tTransferencia=0, tPendiente=0;
     rows.forEach(r => {
@@ -387,12 +482,14 @@ async function cargarHistorial(){
     $('tDeuda').textContent = formatGs(tPendiente);
 
   }catch(err){
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#C0392B;">No se pudo cargar el historial</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#C0392B;">No se pudo cargar el estado</td></tr>';
   }
 }
 
+$('efectivo').value = '0';
+$('transferencia').value = '0';
 actualizarResumen();
-cargarHistorial();
+cargarEstado();
 </script>
 </body>
 </html>
