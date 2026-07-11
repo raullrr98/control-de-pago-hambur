@@ -159,24 +159,16 @@
     font-size:1.2rem;
     color:var(--brasa);
   }
-  .config-toggle{
-    font-size:.75rem;
-    color:#9a8c73;
-    text-align:center;
-    margin-top:-6px;
-    cursor:pointer;
-    text-decoration:underline;
+  .resumen .monto{
+    width:100%;
+    text-align:right;
+    font-size:1rem;
+    border-top:1px dashed var(--linea);
+    padding-top:8px;
+    margin-top:4px;
   }
-  #configBox{display:none;margin-top:10px;}
-  #configBox.show{display:block;}
-  .aviso{
-    font-size:.78rem;
-    color:#9a4a1f;
-    background:#FCEBD8;
-    border-radius:8px;
-    padding:10px 12px;
-    margin-top:14px;
-  }
+  .resumen .monto b{font-size:1.15rem;}
+  #unidadesPagadas{font-size:.78rem;color:#6b5f4f;font-weight:normal;}
 </style>
 </head>
 <body>
@@ -201,39 +193,36 @@
 
       <div class="fila2">
         <div>
-          <label for="efectivo">Pagadas en efectivo</label>
-          <input type="number" id="efectivo" min="0" step="1" value="0">
+          <label for="efectivo">Pagado en efectivo (Gs.)</label>
+          <input type="number" id="efectivo" min="0" step="1000" placeholder="Ej: 50000" value="0">
         </div>
         <div>
-          <label for="transferencia">Pagadas por transferencia</label>
-          <input type="number" id="transferencia" min="0" step="1" value="0">
+          <label for="transferencia">Pagado por transferencia (Gs.)</label>
+          <input type="number" id="transferencia" min="0" step="1000" placeholder="Ej: 30000" value="0">
         </div>
       </div>
 
       <div class="resumen">
-        <div>Total pagado: <b id="totalPagado">0</b></div>
-        <div>Pendiente de cobro: <b id="pendiente" class="">0</b></div>
+        <div>Total pagado: <b id="totalPagado">Gs. 0</b> <span id="unidadesPagadas">(0 hamburguesas)</span></div>
+        <div>Pendiente de cobro: <b id="pendiente" class="">0</b> hamburguesas</div>
+        <div class="monto">Debe: <b id="montoPendiente">Gs. 0</b></div>
       </div>
 
       <button type="submit" id="btnGuardar">Guardar registro</button>
       <div id="estado"></div>
     </form>
-
-    <div class="config-toggle" id="toggleConfig">⚙ Configurar conexión con Google Sheets</div>
-    <div id="configBox">
-      <label for="scriptUrl">URL del Web App de Apps Script</label>
-      <input type="text" id="scriptUrl" placeholder="https://script.google.com/macros/s/XXXX/exec">
-      <p class="aviso">Pegá acá la URL que te da Google al desplegar el script (ver instrucciones que te compartí aparte). Se guarda solo en este navegador.</p>
-    </div>
   </div>
 
   <div class="card">
     <h2>Totales generales</h2>
     <div class="totales">
       <div class="caja"><span>Vendidas</span><b id="tVendido">0</b></div>
-      <div class="caja"><span>Pagado total</span><b id="tPagado">0</b></div>
-      <div class="caja"><span>Efectivo</span><b id="tEfectivo">0</b></div>
-      <div class="caja"><span>Transferencia</span><b id="tTransferencia">0</b></div>
+      <div class="caja"><span>Pagado total</span><b id="tPagado">Gs. 0</b></div>
+      <div class="caja"><span>Efectivo</span><b id="tEfectivo">Gs. 0</b></div>
+      <div class="caja"><span>Transferencia</span><b id="tTransferencia">Gs. 0</b></div>
+      <div class="caja" style="grid-column:1/-1;background:#FCEBD8;">
+        <span>Total a cobrar (deuda pendiente)</span><b id="tDeuda">Gs. 0</b>
+      </div>
     </div>
   </div>
 
@@ -246,14 +235,14 @@
             <th>Fecha</th>
             <th>Vendedor</th>
             <th class="num">Vendido</th>
-            <th class="num">Efectivo</th>
-            <th class="num">Transf.</th>
-            <th class="num">Pagado</th>
-            <th class="num">Pendiente</th>
+            <th class="num">Efectivo (Gs.)</th>
+            <th class="num">Transf. (Gs.)</th>
+            <th class="num">Pagado (Gs.)</th>
+            <th class="num">Pendiente (Gs.)</th>
           </tr>
         </thead>
         <tbody>
-          <tr><td colspan="7" style="text-align:center;color:#9a8c73;">Configurá la conexión para ver el historial</td></tr>
+          <tr><td colspan="7" style="text-align:center;color:#9a8c73;">Cargando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -264,34 +253,37 @@
 <script>
 const $ = (id) => document.getElementById(id);
 
-// --- Config: URL del Apps Script guardada en localStorage ---
-const configBox = $('configBox');
-$('toggleConfig').addEventListener('click', () => configBox.classList.toggle('show'));
+// --- Conexión fija con el Web App de Apps Script ---
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwnl_FPFeFdhI63-JcJow0icfWgRIzAZpkQv-oG66NE1YbrX9vgkVbhtQY6S29gVr8l/exec';
+function getUrl(){ return SCRIPT_URL; }
 
-const URL_POR_DEFECTO = 'https://script.google.com/macros/s/AKfycbwnl_FPFeFdhI63-JcJow0icfWgRIzAZpkQv-oG66NE1YbrX9vgkVbhtQY6S29gVr8l/exec';
-const savedUrl = localStorage.getItem('scriptUrl') || URL_POR_DEFECTO;
-$('scriptUrl').value = savedUrl;
-if(!savedUrl) configBox.classList.add('show');
+// --- Precio por hamburguesa ---
+const PRECIO_UNITARIO = 10000; // Gs.
 
-$('scriptUrl').addEventListener('change', () => {
-  localStorage.setItem('scriptUrl', $('scriptUrl').value.trim());
-  cargarHistorial();
-});
-
-function getUrl(){ return ($('scriptUrl').value || '').trim(); }
+function formatGs(monto){
+  return 'Gs. ' + Math.round(monto).toLocaleString('es-PY');
+}
 
 // --- Cálculo en vivo del resumen ---
 function actualizarResumen(){
   const vendido = parseInt($('vendido').value) || 0;
-  const efectivo = parseInt($('efectivo').value) || 0;
-  const transferencia = parseInt($('transferencia').value) || 0;
-  const pagado = efectivo + transferencia;
-  const pendiente = vendido - pagado;
+  const efectivoGs = parseInt($('efectivo').value) || 0;
+  const transferenciaGs = parseInt($('transferencia').value) || 0;
+  const pagadoGs = efectivoGs + transferenciaGs;
+  const unidadesPagadas = pagadoGs / PRECIO_UNITARIO; // puede quedar con decimales si el monto no es múltiplo exacto
+  const pendienteUnidades = vendido - unidadesPagadas;
+  const pendienteGs = Math.max(vendido * PRECIO_UNITARIO - pagadoGs, 0);
 
-  $('totalPagado').textContent = pagado;
+  $('totalPagado').textContent = formatGs(pagadoGs);
+  $('unidadesPagadas').textContent = `(${unidadesPagadas.toFixed(unidadesPagadas % 1 === 0 ? 0 : 1)} hamburguesas)`;
+
   const pendEl = $('pendiente');
-  pendEl.textContent = pendiente;
-  pendEl.classList.toggle('pendiente-ok', pendiente <= 0);
+  pendEl.textContent = pendienteUnidades.toFixed(pendienteUnidades % 1 === 0 ? 0 : 1);
+  pendEl.classList.toggle('pendiente-ok', pendienteUnidades <= 0);
+
+  const montoEl = $('montoPendiente');
+  montoEl.textContent = formatGs(pendienteGs);
+  montoEl.classList.toggle('pendiente-ok', pendienteGs <= 0);
 }
 ['vendido','efectivo','transferencia'].forEach(id => $(id).addEventListener('input', actualizarResumen));
 
@@ -300,12 +292,6 @@ $('form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const url = getUrl();
   const estado = $('estado');
-  if(!url){
-    estado.textContent = 'Primero configurá la URL del Web App (⚙ abajo del botón).';
-    estado.className = 'error';
-    configBox.classList.add('show');
-    return;
-  }
 
   const data = {
     vendedor: $('vendedor').value.trim(),
@@ -343,10 +329,6 @@ $('form').addEventListener('submit', async (e) => {
 async function cargarHistorial(){
   const url = getUrl();
   const tbody = document.querySelector('#tablaHistorial tbody');
-  if(!url){
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#9a8c73;">Configurá la conexión para ver el historial</td></tr>';
-    return;
-  }
   tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#9a8c73;">Cargando...</td></tr>';
 
   try{
@@ -361,25 +343,27 @@ async function cargarHistorial(){
           <td>${r.fecha}</td>
           <td>${r.vendedor}</td>
           <td class="num">${r.vendido}</td>
-          <td class="num">${r.efectivo}</td>
-          <td class="num">${r.transferencia}</td>
-          <td class="num">${r.pagado}</td>
-          <td class="num">${r.pendiente}</td>
+          <td class="num">${formatGs(r.efectivo)}</td>
+          <td class="num">${formatGs(r.transferencia)}</td>
+          <td class="num">${formatGs(r.pagado)}</td>
+          <td class="num">${formatGs(r.pendiente)}</td>
         </tr>
       `).join('');
     }
 
-    let tVendido=0, tPagado=0, tEfectivo=0, tTransferencia=0;
+    let tVendido=0, tPagado=0, tEfectivo=0, tTransferencia=0, tPendiente=0;
     rows.forEach(r => {
       tVendido += Number(r.vendido)||0;
       tEfectivo += Number(r.efectivo)||0;
       tTransferencia += Number(r.transferencia)||0;
       tPagado += Number(r.pagado)||0;
+      tPendiente += Math.max(Number(r.pendiente)||0, 0);
     });
     $('tVendido').textContent = tVendido;
-    $('tPagado').textContent = tPagado;
-    $('tEfectivo').textContent = tEfectivo;
-    $('tTransferencia').textContent = tTransferencia;
+    $('tPagado').textContent = formatGs(tPagado);
+    $('tEfectivo').textContent = formatGs(tEfectivo);
+    $('tTransferencia').textContent = formatGs(tTransferencia);
+    $('tDeuda').textContent = formatGs(tPendiente);
 
   }catch(err){
     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#C0392B;">No se pudo cargar el historial</td></tr>';
