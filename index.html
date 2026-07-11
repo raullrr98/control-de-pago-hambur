@@ -194,11 +194,11 @@
       <div class="fila2">
         <div>
           <label for="efectivo">Pagado en efectivo (Gs.)</label>
-          <input type="number" id="efectivo" min="0" step="1000" placeholder="Ej: 50000" value="0">
+          <input type="text" inputmode="numeric" id="efectivo" placeholder="Ej: 50.000" value="0">
         </div>
         <div>
           <label for="transferencia">Pagado por transferencia (Gs.)</label>
-          <input type="number" id="transferencia" min="0" step="1000" placeholder="Ej: 30000" value="0">
+          <input type="text" inputmode="numeric" id="transferencia" placeholder="Ej: 30.000" value="0">
         </div>
       </div>
 
@@ -264,11 +264,32 @@ function formatGs(monto){
   return 'Gs. ' + Math.round(monto).toLocaleString('es-PY');
 }
 
+// --- Formato de miles en vivo para los inputs de montos ---
+function soloDigitos(str){
+  return (str || '').replace(/\D/g, '');
+}
+function parseMonto(id){
+  return parseInt(soloDigitos($(id).value)) || 0;
+}
+function formatearInputMiles(input){
+  input.addEventListener('input', () => {
+    const digitos = soloDigitos(input.value);
+    const cursorDesdeElFinal = input.value.length - input.selectionStart;
+    input.value = digitos ? Number(digitos).toLocaleString('es-PY') : '';
+    const nuevaPos = input.value.length - cursorDesdeElFinal;
+    input.setSelectionRange(nuevaPos, nuevaPos);
+  });
+}
+formatearInputMiles($('efectivo'));
+formatearInputMiles($('transferencia'));
+$('efectivo').value = '0';
+$('transferencia').value = '0';
+
 // --- Cálculo en vivo del resumen ---
 function actualizarResumen(){
   const vendido = parseInt($('vendido').value) || 0;
-  const efectivoGs = parseInt($('efectivo').value) || 0;
-  const transferenciaGs = parseInt($('transferencia').value) || 0;
+  const efectivoGs = parseMonto('efectivo');
+  const transferenciaGs = parseMonto('transferencia');
   const pagadoGs = efectivoGs + transferenciaGs;
   const unidadesPagadas = pagadoGs / PRECIO_UNITARIO; // puede quedar con decimales si el monto no es múltiplo exacto
   const pendienteUnidades = vendido - unidadesPagadas;
@@ -296,8 +317,8 @@ $('form').addEventListener('submit', async (e) => {
   const data = {
     vendedor: $('vendedor').value.trim(),
     vendido: parseInt($('vendido').value) || 0,
-    efectivo: parseInt($('efectivo').value) || 0,
-    transferencia: parseInt($('transferencia').value) || 0,
+    efectivo: parseMonto('efectivo'),
+    transferencia: parseMonto('transferencia'),
   };
 
   const btn = $('btnGuardar');
