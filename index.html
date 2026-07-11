@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Control de Pagos — Hamburguesada Benéfica</title>
+<style>
+  :root{
+    --mostaza: #E3A008;
+    --brasa: #C0392B;
+    --carbon: #2B2420;
+    --papel: #FFF8EC;
+    --oliva: #4B5A3A;
+    --linea: #DCD0BA;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
+    background: var(--papel);
+    color: var(--carbon);
+    padding: 24px 16px 60px;
+  }
+  .wrap{max-width:640px;margin:0 auto;}
+  header{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    margin-bottom:22px;
+  }
+  header .icono{
+    font-size:38px;
+    line-height:1;
+  }
+  header h1{
+    font-size:1.4rem;
+    margin:0;
+    letter-spacing:.3px;
+  }
+  header p{
+    margin:2px 0 0;
+    font-size:.85rem;
+    color:#6b5f4f;
+  }
+  .card{
+    background:#fff;
+    border:1px solid var(--linea);
+    border-radius:14px;
+    padding:20px;
+    margin-bottom:20px;
+    box-shadow: 0 2px 0 var(--linea);
+  }
+  .card h2{
+    font-size:.95rem;
+    text-transform:uppercase;
+    letter-spacing:1px;
+    color:var(--brasa);
+    margin:0 0 14px;
+  }
+  label{
+    display:block;
+    font-size:.82rem;
+    font-weight:bold;
+    margin:12px 0 4px;
+    color:#4a4030;
+  }
+  input, select{
+    width:100%;
+    padding:10px 12px;
+    border:1.5px solid var(--linea);
+    border-radius:8px;
+    font-size:1rem;
+    background:#fffdf9;
+  }
+  input:focus, select:focus{
+    outline:none;
+    border-color:var(--mostaza);
+  }
+  .fila2{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+  }
+  .resumen{
+    margin-top:16px;
+    padding:12px 14px;
+    background:#FBF3DE;
+    border-radius:10px;
+    font-size:.88rem;
+    display:flex;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  .resumen b{color:var(--brasa);}
+  .pendiente-ok{color:var(--oliva) !important;}
+  button{
+    margin-top:18px;
+    width:100%;
+    padding:13px;
+    border:none;
+    border-radius:9px;
+    background:var(--brasa);
+    color:#fff;
+    font-size:1rem;
+    font-weight:bold;
+    letter-spacing:.3px;
+    cursor:pointer;
+    transition:opacity .15s;
+  }
+  button:disabled{opacity:.6;cursor:wait;}
+  button:hover:not(:disabled){opacity:.9;}
+  #estado{
+    text-align:center;
+    font-size:.85rem;
+    margin-top:10px;
+    min-height:18px;
+  }
+  #estado.ok{color:var(--oliva);}
+  #estado.error{color:var(--brasa);}
+
+  table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:.82rem;
+  }
+  th, td{
+    text-align:left;
+    padding:8px 6px;
+    border-bottom:1px solid var(--linea);
+    white-space:nowrap;
+  }
+  th{
+    color:#6b5f4f;
+    text-transform:uppercase;
+    font-size:.68rem;
+    letter-spacing:.5px;
+  }
+  .num{text-align:right;}
+  .tabla-scroll{overflow-x:auto;}
+  .totales{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:10px;
+    margin-bottom:16px;
+  }
+  .totales .caja{
+    background:#FBF3DE;
+    border-radius:10px;
+    padding:10px 12px;
+  }
+  .totales .caja span{
+    display:block;
+    font-size:.7rem;
+    color:#6b5f4f;
+    text-transform:uppercase;
+  }
+  .totales .caja b{
+    font-size:1.2rem;
+    color:var(--brasa);
+  }
+  .config-toggle{
+    font-size:.75rem;
+    color:#9a8c73;
+    text-align:center;
+    margin-top:-6px;
+    cursor:pointer;
+    text-decoration:underline;
+  }
+  #configBox{display:none;margin-top:10px;}
+  #configBox.show{display:block;}
+  .aviso{
+    font-size:.78rem;
+    color:#9a4a1f;
+    background:#FCEBD8;
+    border-radius:8px;
+    padding:10px 12px;
+    margin-top:14px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="icono">🍔</div>
+    <div>
+      <h1>Control de Pagos</h1>
+      <p>Hamburguesada benéfica — ventas y cobros</p>
+    </div>
+  </header>
+
+  <div class="card">
+    <h2>Registrar pago</h2>
+    <form id="form">
+      <label for="vendedor">Vendedor</label>
+      <input type="text" id="vendedor" placeholder="Ej: Óscar" required>
+
+      <label for="vendido">Hamburguesas vendidas (total acumulado)</label>
+      <input type="number" id="vendido" min="0" step="1" placeholder="Ej: 10" required>
+
+      <div class="fila2">
+        <div>
+          <label for="efectivo">Pagadas en efectivo</label>
+          <input type="number" id="efectivo" min="0" step="1" value="0">
+        </div>
+        <div>
+          <label for="transferencia">Pagadas por transferencia</label>
+          <input type="number" id="transferencia" min="0" step="1" value="0">
+        </div>
+      </div>
+
+      <div class="resumen">
+        <div>Total pagado: <b id="totalPagado">0</b></div>
+        <div>Pendiente de cobro: <b id="pendiente" class="">0</b></div>
+      </div>
+
+      <button type="submit" id="btnGuardar">Guardar registro</button>
+      <div id="estado"></div>
+    </form>
+
+    <div class="config-toggle" id="toggleConfig">⚙ Configurar conexión con Google Sheets</div>
+    <div id="configBox">
+      <label for="scriptUrl">URL del Web App de Apps Script</label>
+      <input type="text" id="scriptUrl" placeholder="https://script.google.com/macros/s/XXXX/exec">
+      <p class="aviso">Pegá acá la URL que te da Google al desplegar el script (ver instrucciones que te compartí aparte). Se guarda solo en este navegador.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Totales generales</h2>
+    <div class="totales">
+      <div class="caja"><span>Vendidas</span><b id="tVendido">0</b></div>
+      <div class="caja"><span>Pagado total</span><b id="tPagado">0</b></div>
+      <div class="caja"><span>Efectivo</span><b id="tEfectivo">0</b></div>
+      <div class="caja"><span>Transferencia</span><b id="tTransferencia">0</b></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Historial</h2>
+    <div class="tabla-scroll">
+      <table id="tablaHistorial">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Vendedor</th>
+            <th class="num">Vendido</th>
+            <th class="num">Efectivo</th>
+            <th class="num">Transf.</th>
+            <th class="num">Pagado</th>
+            <th class="num">Pendiente</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td colspan="7" style="text-align:center;color:#9a8c73;">Configurá la conexión para ver el historial</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+// --- Config: URL del Apps Script guardada en localStorage ---
+const configBox = $('configBox');
+$('toggleConfig').addEventListener('click', () => configBox.classList.toggle('show'));
+
+const URL_POR_DEFECTO = 'https://script.google.com/macros/s/AKfycbwnl_FPFeFdhI63-JcJow0icfWgRIzAZpkQv-oG66NE1YbrX9vgkVbhtQY6S29gVr8l/exec';
+const savedUrl = localStorage.getItem('scriptUrl') || URL_POR_DEFECTO;
+$('scriptUrl').value = savedUrl;
+if(!savedUrl) configBox.classList.add('show');
+
+$('scriptUrl').addEventListener('change', () => {
+  localStorage.setItem('scriptUrl', $('scriptUrl').value.trim());
+  cargarHistorial();
+});
+
+function getUrl(){ return ($('scriptUrl').value || '').trim(); }
+
+// --- Cálculo en vivo del resumen ---
+function actualizarResumen(){
+  const vendido = parseInt($('vendido').value) || 0;
+  const efectivo = parseInt($('efectivo').value) || 0;
+  const transferencia = parseInt($('transferencia').value) || 0;
+  const pagado = efectivo + transferencia;
+  const pendiente = vendido - pagado;
+
+  $('totalPagado').textContent = pagado;
+  const pendEl = $('pendiente');
+  pendEl.textContent = pendiente;
+  pendEl.classList.toggle('pendiente-ok', pendiente <= 0);
+}
+['vendido','efectivo','transferencia'].forEach(id => $(id).addEventListener('input', actualizarResumen));
+
+// --- Envío del formulario ---
+$('form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const url = getUrl();
+  const estado = $('estado');
+  if(!url){
+    estado.textContent = 'Primero configurá la URL del Web App (⚙ abajo del botón).';
+    estado.className = 'error';
+    configBox.classList.add('show');
+    return;
+  }
+
+  const data = {
+    vendedor: $('vendedor').value.trim(),
+    vendido: parseInt($('vendido').value) || 0,
+    efectivo: parseInt($('efectivo').value) || 0,
+    transferencia: parseInt($('transferencia').value) || 0,
+  };
+
+  const btn = $('btnGuardar');
+  btn.disabled = true;
+  estado.textContent = 'Guardando...';
+  estado.className = '';
+
+  try{
+    await fetch(url, {
+      method: 'POST',
+      mode: 'no-cors', // Apps Script Web Apps no devuelven CORS; usamos no-cors para escribir
+      headers: {'Content-Type': 'text/plain'},
+      body: JSON.stringify(data)
+    });
+    estado.textContent = '✅ Registro guardado';
+    estado.className = 'ok';
+    $('form').reset();
+    actualizarResumen();
+    setTimeout(cargarHistorial, 1200); // damos tiempo a que la sheet se actualice
+  }catch(err){
+    estado.textContent = '❌ No se pudo guardar. Revisá la URL o tu conexión.';
+    estado.className = 'error';
+  }finally{
+    btn.disabled = false;
+  }
+});
+
+// --- Carga del historial y totales desde la Sheet ---
+async function cargarHistorial(){
+  const url = getUrl();
+  const tbody = document.querySelector('#tablaHistorial tbody');
+  if(!url){
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#9a8c73;">Configurá la conexión para ver el historial</td></tr>';
+    return;
+  }
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#9a8c73;">Cargando...</td></tr>';
+
+  try{
+    const res = await fetch(url + '?action=historial');
+    const rows = await res.json();
+
+    if(!rows.length){
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#9a8c73;">Sin registros todavía</td></tr>';
+    } else {
+      tbody.innerHTML = rows.map(r => `
+        <tr>
+          <td>${r.fecha}</td>
+          <td>${r.vendedor}</td>
+          <td class="num">${r.vendido}</td>
+          <td class="num">${r.efectivo}</td>
+          <td class="num">${r.transferencia}</td>
+          <td class="num">${r.pagado}</td>
+          <td class="num">${r.pendiente}</td>
+        </tr>
+      `).join('');
+    }
+
+    let tVendido=0, tPagado=0, tEfectivo=0, tTransferencia=0;
+    rows.forEach(r => {
+      tVendido += Number(r.vendido)||0;
+      tEfectivo += Number(r.efectivo)||0;
+      tTransferencia += Number(r.transferencia)||0;
+      tPagado += Number(r.pagado)||0;
+    });
+    $('tVendido').textContent = tVendido;
+    $('tPagado').textContent = tPagado;
+    $('tEfectivo').textContent = tEfectivo;
+    $('tTransferencia').textContent = tTransferencia;
+
+  }catch(err){
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#C0392B;">No se pudo cargar el historial</td></tr>';
+  }
+}
+
+actualizarResumen();
+cargarHistorial();
+</script>
+</body>
+</html>
